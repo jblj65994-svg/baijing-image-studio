@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>图片增强｜白境工作台</title>
+  <style>
+    :root{--ink:#15221c;--muted:#718078;--line:#e3e9e4;--green:#1f6a4a;--soft:#f7f8f4}
+    *{box-sizing:border-box}body{margin:0;color:var(--ink);background:#fcfcf9;font-family:Arial,"Microsoft YaHei",sans-serif}button,input{font:inherit}button{cursor:pointer}
+    .topbar{height:74px;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 max(28px,calc((100vw - 1200px)/2));gap:48px;background:#fcfcf9}
+    .brand{font-size:18px;font-weight:700;white-space:nowrap}.brand b{display:inline-grid;place-items:center;width:27px;height:27px;border-radius:50%;margin-right:8px;color:#fff;background:var(--green);font-size:14px}.nav{display:flex;gap:30px;flex:1}.nav a{color:var(--muted);font-size:14px;text-decoration:none}.nav .active{color:var(--green);font-weight:700;border-bottom:2px solid var(--green);padding:27px 0 24px}.login{border:0;background:none;color:#46554d;font-size:14px}
+    .hero{text-align:center;padding:62px 24px 42px;background:radial-gradient(circle at 50% 30%,#edf8eb 0,rgba(237,248,235,0) 43%)}.eyebrow{color:var(--green);font-size:12px;font-weight:700;letter-spacing:1.6px;margin:0 0 13px}.hero h1{font-family:Georgia,"Songti SC",serif;font-weight:500;letter-spacing:-1.5px;font-size:clamp(34px,5vw,54px);margin:0}.hero p:last-child{margin:16px 0 0;color:var(--muted)}
+    .workspace{max-width:1200px;margin:0 auto;padding:0 24px 72px}.panel{border:1px solid var(--line);background:#fff;padding:30px}.panel-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.number{color:#70a37c;letter-spacing:1px;font-size:11px;font-weight:700;margin:0 0 5px}.panel h2{font-size:20px;margin:0}.hint{color:#8b9790;font-size:12px;margin:4px 0 0}.drop{height:230px;margin-top:24px;background:var(--soft);border:1px dashed #bbccc0;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;color:var(--ink);width:100%;transition:.2s}.drop:hover{border-color:var(--green);background:#f5fbf4}.drop.has-image{padding:12px;background-image:linear-gradient(45deg,#f0f3ef 25%,transparent 25%),linear-gradient(-45deg,#f0f3ef 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f0f3ef 75%),linear-gradient(-45deg,transparent 75%,#f0f3ef 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0}.drop img{width:100%;height:100%;object-fit:contain}.upload-icon{display:grid;place-items:center;border:1px solid #bad1bf;height:42px;width:42px;color:var(--green);font-size:22px;margin-bottom:12px}.drop strong{font-size:14px}.drop small{color:#849087;font-size:12px;margin-top:8px}.replace{border:0;background:none;color:var(--green);font-size:13px;text-decoration:underline;padding:12px 0 0}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:26px;padding-top:24px;border-top:1px solid #ecf0ec}.field{display:block;font-size:13px;font-weight:700;margin-bottom:10px}.choices{display:flex;gap:8px}.choices button{flex:1;background:#fff;border:1px solid #dce4dd;padding:11px 5px;color:#607067;font-size:12px}.choices button.selected{background:#eff8ee;color:var(--green);border-color:#80ad89;font-weight:700}.primary{width:100%;margin-top:26px;color:#fff;background:var(--green);border:0;padding:14px 16px;font-size:14px;font-weight:700;display:flex;justify-content:space-between}.primary:disabled{background:#8aa596;cursor:not-allowed}.progress{display:none;margin-top:20px;padding:14px 16px;background:#f5f8f3;color:#68776d;font-size:12px}.progress.show{display:block}.progress-row{display:flex;justify-content:space-between;margin-bottom:9px}.bar{height:7px;background:#dfe8df;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--green);transition:width .25s}
+    .result{margin-top:24px;border:1px solid var(--line);background:#fff;padding:30px}.status{color:#809087;font-size:12px;margin:0}.status b{height:7px;width:7px;display:inline-block;background:#7bac82;border-radius:50%;margin-right:7px}.compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}.compare-card{border:1px solid #edf0ed;background:#fff}.compare-card h3{font-size:12px;margin:0;padding:12px 14px;border-bottom:1px solid #edf0ed;color:#607067}.canvas-wrap{height:300px;display:grid;place-items:center;background:#fff;overflow:hidden;padding:12px}.canvas-wrap.checker{background-image:linear-gradient(45deg,#f0f3ef 25%,transparent 25%),linear-gradient(-45deg,#f0f3ef 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f0f3ef 75%),linear-gradient(-45deg,transparent 75%,#f0f3ef 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0}.canvas-wrap img{max-width:100%;max-height:100%;object-fit:contain}.empty{text-align:center;color:#9aa69f;font-size:12px}.empty span{color:#9bbda0;font-size:30px}.download{display:block;width:180px;margin:20px 0 0 auto;color:#fff;background:var(--green);border:0;padding:12px 15px;font-size:14px;font-weight:700}.download:disabled{background:#d8dfd9;color:#94a097;cursor:not-allowed}
+    @media(max-width:760px){.topbar{padding:0 18px;gap:0}.nav{display:none}.login{margin-left:auto}.hero{padding-top:50px}.panel,.result{padding:22px}.controls,.compare{grid-template-columns:1fr}.canvas-wrap{height:250px}.download{width:100%}}
+  </style>
+  <style>.download{text-decoration:none;text-align:center}.download.disabled{background:#d8dfd9;color:#94a097;cursor:not-allowed}.download:not(.disabled){cursor:pointer}</style>
+  </head>
+<body>
+  <header class="topbar"><div class="brand"><b>白</b>白境工作台</div><div class="nav"><a href="./index.html">白底主图</a><a class="active" href="./enhance.html">图片增强</a><a href="./background.html">换背景</a><a href="./index.html#templates">营销模板</a></div><button class="login">登录 / 注册</button></header>
+  <section class="hero"><p class="eyebrow">电商图片处理 · 第二站</p><h1>让细节，更清楚</h1><p>本机完成放大、锐化和轻度对比度优化，原图不会上传到第三方服务。</p></section>
+  <main class="workspace">
+    <section class="panel">
+      <div class="panel-head"><div><p class="number">01</p><h2>上传需要增强的图片</h2></div><p class="hint">JPG、PNG、WEBP，建议不超过 20MB</p></div>
+      <button class="drop" id="drop" type="button"><span class="upload-icon">↑</span><strong>点击或拖入图片</strong><small>适合商品主图、细节图和压缩过的图片</small></button>
+      <input id="file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+      <button class="replace" id="replace" type="button" hidden>重新选择图片</button>
+      <div class="controls">
+        <div><label class="field">增强程度</label><div class="choices" id="strength"><button type="button" data-value="light">轻度</button><button type="button" class="selected" data-value="standard">标准</button><button type="button" data-value="strong">增强</button></div></div>
+        <div><label class="field">输出倍率</label><div class="choices" id="scale"><button type="button" class="selected" data-value="1">原尺寸</button><button type="button" data-value="2">2× 放大</button><button type="button" data-value="3">3× 放大</button></div></div>
+      </div>
+      <button class="primary" id="process" type="button">开始变清晰 <span>→</span></button>
+      <div class="progress" id="progress"><div class="progress-row"><b id="progressText">正在准备</b><span id="progressPercent">0%</span></div><div class="bar"><i id="progressBar"></i></div></div>
+    </section>
+    <section class="result">
+      <div class="panel-head"><div><p class="number">02</p><h2>处理结果</h2></div><p class="status"><b></b><span id="status">上传图片后即可开始处理</span></p></div>
+      <div class="compare"><div class="compare-card"><h3>原图</h3><div class="canvas-wrap" id="before"><div class="empty"><span>✦</span><p>原图会显示在这里</p></div></div></div><div class="compare-card"><h3>增强后</h3><div class="canvas-wrap" id="after"><div class="empty"><span>✦</span><p>处理完成后显示结果</p></div></div></div></div>
+      <a class="download disabled" id="download" href="#" aria-disabled="true">下载增强图片 ↓</a>
+    </section>
+  </main>
+  <script src="./enhance.js"></script>
+</body>
+</html>
