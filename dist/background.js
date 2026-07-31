@@ -30,20 +30,106 @@ let offsetX = 0;
 let offsetY = 0;
 
 const photoTemplateData = [
-  ['photo-01-charcoal-stone.png', '炭黑粗石'],
-  ['photo-02-warm-limestone.png', '暖灰石灰岩'],
-  ['photo-03-graphite-slate.png', '石墨板岩'],
-  ['photo-04-walnut-table.png', '胡桃木桌面'],
-  ['photo-05-microcement.png', '浅灰微水泥'],
-  ['photo-06-champagne-linen.png', '香槟亚麻'],
-  ['photo-07-emerald-velvet.png', '翡翠丝绒'],
-  ['photo-08-sandstone-plaster.png', '沙色石灰墙'],
-  ['photo-09-smoked-glass.png', '烟熏黑玻璃'],
-  ['photo-10-ivory-marble.png', '象牙白大理石'],
+  ['charcoalStone', '炭黑粗石', 'linear-gradient(135deg,#242724,#6b7069 48%,#252824)'],
+  ['warmLimestone', '暖灰石灰岩', 'linear-gradient(135deg,#d4cdc0,#f3efe5 42%,#a79f93)'],
+  ['graphiteSlate', '石墨板岩', 'linear-gradient(135deg,#353937,#8a918b 50%,#222725)'],
+  ['walnutTable', '胡桃木桌面', 'repeating-linear-gradient(12deg,#8a5736 0 12px,#b37a4f 13px 21px,#754529 22px 30px)'],
+  ['microcement', '浅灰微水泥', 'linear-gradient(135deg,#d7d6cf,#f4f2e8 44%,#b9b8b0)'],
+  ['champagneLinen', '香槟亚麻', 'linear-gradient(135deg,#b89161,#f0ddba 48%,#9f7a4e)'],
+  ['emeraldVelvet', '翡翠丝绒', 'radial-gradient(circle at 30% 20%,#0d7a5a,#083827 55%,#041b14)'],
+  ['sandstone', '沙色石灰墙', 'linear-gradient(135deg,#d9b98b,#f3e5ca 48%,#b88658)'],
+  ['smokedGlass', '烟熏黑玻璃', 'linear-gradient(135deg,#101715,#4d5853 45%,#0a0d0c)'],
+  ['ivoryMarble', '象牙白大理石', 'linear-gradient(135deg,#fbfaf5,#d9d4c9 44%,#ffffff)'],
 ];
 
-function assetPath(file) {
-  return new URL(`/assets/backgrounds/${file}`, document.baseURI).href;
+function seededNoise(x, y, seed = 11) {
+  const value = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawStoneTexture(colors, seed = 4, contrast = 1) {
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  colors.forEach((color, index) => grad.addColorStop(index / (colors.length - 1), color));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const density = 420;
+  for (let i = 0; i < density; i += 1) {
+    const x = seededNoise(i, 1, seed) * canvas.width;
+    const y = seededNoise(i, 2, seed) * canvas.height;
+    const w = 3 + seededNoise(i, 3, seed) * 34;
+    const h = 1 + seededNoise(i, 4, seed) * 14;
+    const alpha = (0.012 + seededNoise(i, 5, seed) * 0.052) * contrast;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((seededNoise(i, 6, seed) - 0.5) * 1.6);
+    ctx.fillStyle = seededNoise(i, 7, seed) > 0.48 ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  for (let i = 0; i < 26; i += 1) {
+    const startY = seededNoise(i, 12, seed) * canvas.height;
+    ctx.strokeStyle = seededNoise(i, 13, seed) > 0.5 ? 'rgba(255,255,255,.055)' : 'rgba(0,0,0,.07)';
+    ctx.lineWidth = 1 + seededNoise(i, 14, seed) * 3;
+    ctx.beginPath();
+    ctx.moveTo(-40, startY);
+    for (let x = 0; x <= canvas.width + 80; x += 120) {
+      ctx.lineTo(x, startY + Math.sin(x * 0.011 + i) * (10 + seededNoise(i, x, seed) * 20));
+    }
+    ctx.stroke();
+  }
+}
+
+function drawFabricTexture(base, highlight, seed = 8) {
+  const grad = ctx.createRadialGradient(canvas.width * 0.36, canvas.height * 0.26, 20, canvas.width * 0.5, canvas.height * 0.58, canvas.width * 0.75);
+  grad.addColorStop(0, highlight);
+  grad.addColorStop(1, base);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = -canvas.height; i < canvas.width; i += 18) {
+    ctx.strokeStyle = `rgba(255,255,255,${0.035 + seededNoise(i, 1, seed) * 0.045})`;
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.bezierCurveTo(i + 180, 260, i - 80, 610, i + canvas.height, canvas.height);
+    ctx.stroke();
+  }
+}
+
+function drawWoodTexture() {
+  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  grad.addColorStop(0, '#8b5737');
+  grad.addColorStop(0.52, '#b97d50');
+  grad.addColorStop(1, '#704225');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < canvas.height; y += 28) {
+    ctx.strokeStyle = `rgba(55,25,10,${0.13 + seededNoise(y, 1, 21) * 0.11})`;
+    ctx.lineWidth = 2 + seededNoise(y, 2, 21) * 5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x <= canvas.width; x += 90) {
+      ctx.lineTo(x, y + Math.sin(x * 0.018 + y * 0.02) * 11);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawBuiltInTexture(name) {
+  if (name === 'charcoalStone') return drawStoneTexture(['#151817', '#555b56', '#2a2e2b'], 2, 1.25);
+  if (name === 'warmLimestone') return drawStoneTexture(['#b9b2a7', '#eee9dc', '#8f887d'], 3, 0.75);
+  if (name === 'graphiteSlate') return drawStoneTexture(['#2a2f2d', '#8a908b', '#1d2220'], 5, 1.05);
+  if (name === 'walnutTable') return drawWoodTexture();
+  if (name === 'microcement') return drawStoneTexture(['#bfc0bb', '#f2efe6', '#a9aaa4'], 7, 0.58);
+  if (name === 'champagneLinen') return drawFabricTexture('#a77d4d', '#f1d9ad', 9);
+  if (name === 'emeraldVelvet') return drawFabricTexture('#06261b', '#0d7a5a', 10);
+  if (name === 'sandstone') return drawStoneTexture(['#c09161', '#f0ddbd', '#a97949'], 12, 0.8);
+  if (name === 'smokedGlass') return drawStoneTexture(['#080c0b', '#3b4642', '#111816'], 13, 1.1);
+  if (name === 'ivoryMarble') return drawStoneTexture(['#ffffff', '#ddd8ce', '#f8f4ea'], 15, 0.45);
+  return false;
 }
 
 function loadImage(url) {
@@ -85,6 +171,10 @@ function resetDownload() {
 }
 
 function drawBackground() {
+  if (drawBuiltInTexture(template) !== false) {
+    return;
+  }
+
   if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth) {
     ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
     return;
@@ -317,10 +407,10 @@ document.querySelector('#swatches').addEventListener('click', (event) => {
 
 const photoTemplateGrid = document.querySelector('#templates');
 if (photoTemplateGrid) {
-  photoTemplateGrid.innerHTML = photoTemplateData.map(([file, label], index) => {
-    const url = assetPath(file);
-    return `<button class="template asset${index === 0 ? ' selected' : ''}" data-background="${url}" type="button" style="background-image:url('${url}')"><span>${label}</span></button>`;
+  photoTemplateGrid.innerHTML = photoTemplateData.map(([value, label, css], index) => {
+    return `<button class="template asset${index === 0 ? ' selected' : ''}" data-template="${value}" type="button" style="background:${css}"><span>${label}</span></button>`;
   }).join('');
+  template = photoTemplateData[0][0];
 }
 
 document.querySelector('#templates').addEventListener('click', (event) => {
