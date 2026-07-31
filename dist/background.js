@@ -1,164 +1,53 @@
-const fileInput = document.querySelector('#file');
-const bgFile = document.querySelector('#bgFile');
-const drop = document.querySelector('#drop');
-const replace = document.querySelector('#replace');
-const canvas = document.querySelector('#canvas');
-const empty = document.querySelector('#empty');
-const generate = document.querySelector('#generate');
-const download = document.querySelector('#download');
-const status = document.querySelector('#status');
-const progress = document.querySelector('#progress');
-const progressText = document.querySelector('#progressText');
-const progressPercent = document.querySelector('#progressPercent');
-const progressBar = document.querySelector('#progressBar');
+const $ = (s) => document.querySelector(s);
+const fileInput = $('#file');
+const bgFile = $('#bgFile');
+const drop = $('#drop');
+const replace = $('#replace');
+const canvas = $('#canvas');
+const empty = $('#empty');
+const generate = $('#generate');
+const download = $('#download');
+const status = $('#status');
+const progress = $('#progress');
+const progressText = $('#progressText');
+const progressPercent = $('#progressPercent');
+const progressBar = $('#progressBar');
 const ctx = canvas.getContext('2d');
 
 let sourceImage = null;
-let subjectCanvas = null;
 let sourceUrl = '';
-let backgroundUrl = '';
-let backgroundImage = null;
-let backgroundColor = '#ffffff';
-let template = 'studio';
-let subjectMode = 'local';
+let subjectImage = null;
+let bgImage = null;
+let resultUrl = '';
+let mode = 'local';
+let template = 'darkGraphitePhoto';
 let scale = 1;
 let rotation = 0;
 let hasShadow = true;
-let resultUrl = '';
-let dragging = false;
 let offsetX = 0;
 let offsetY = 0;
+let dragging = false;
 
-const photoTemplateData = [
-  ['charcoalStone', '炭黑粗石', 'linear-gradient(135deg,#242724,#6b7069 48%,#252824)'],
-  ['warmLimestone', '暖灰石灰岩', 'linear-gradient(135deg,#d4cdc0,#f3efe5 42%,#a79f93)'],
-  ['graphiteSlate', '石墨板岩', 'linear-gradient(135deg,#353937,#8a918b 50%,#222725)'],
-  ['walnutTable', '胡桃木桌面', 'repeating-linear-gradient(12deg,#8a5736 0 12px,#b37a4f 13px 21px,#754529 22px 30px)'],
-  ['microcement', '浅灰微水泥', 'linear-gradient(135deg,#d7d6cf,#f4f2e8 44%,#b9b8b0)'],
-  ['champagneLinen', '香槟亚麻', 'linear-gradient(135deg,#b89161,#f0ddba 48%,#9f7a4e)'],
-  ['emeraldVelvet', '翡翠丝绒', 'radial-gradient(circle at 30% 20%,#0d7a5a,#083827 55%,#041b14)'],
-  ['sandstone', '沙色石灰墙', 'linear-gradient(135deg,#d9b98b,#f3e5ca 48%,#b88658)'],
-  ['smokedGlass', '烟熏黑玻璃', 'linear-gradient(135deg,#101715,#4d5853 45%,#0a0d0c)'],
-  ['ivoryMarble', '象牙白大理石', 'linear-gradient(135deg,#fbfaf5,#d9d4c9 44%,#ffffff)'],
+const templates = [
+  ['darkGraphitePhoto', '暗灰岩面', 'linear-gradient(180deg,#657069 0 42%,#232827 43% 100%)'],
+  ['warmLimestonePhoto', '暖灰石灰岩', 'linear-gradient(180deg,#ddd3c0 0 42%,#8e846f 43% 100%)'],
+  ['champagneTravertinePhoto', '香槟洞石', 'linear-gradient(180deg,#edd0a3 0 42%,#a97843 43% 100%)'],
+  ['smokedSlatePhoto', '烟熏板岩', 'linear-gradient(180deg,#58635f 0 42%,#111716 43% 100%)'],
+  ['greenGrayPhoto', '绿灰石面', 'linear-gradient(180deg,#91a397 0 42%,#30443b 43% 100%)'],
+  ['ivoryMarblePhoto', '象牙大理石', 'linear-gradient(180deg,#f7f2e8 0 42%,#bdb4a4 43% 100%)'],
 ];
 
-function seededNoise(x, y, seed = 11) {
+function noise(x, y, seed) {
   const value = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
   return value - Math.floor(value);
 }
 
-function drawStoneTexture(colors, seed = 4, contrast = 1) {
-  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  colors.forEach((color, index) => grad.addColorStop(index / (colors.length - 1), color));
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const density = 420;
-  for (let i = 0; i < density; i += 1) {
-    const x = seededNoise(i, 1, seed) * canvas.width;
-    const y = seededNoise(i, 2, seed) * canvas.height;
-    const w = 3 + seededNoise(i, 3, seed) * 34;
-    const h = 1 + seededNoise(i, 4, seed) * 14;
-    const alpha = (0.012 + seededNoise(i, 5, seed) * 0.052) * contrast;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate((seededNoise(i, 6, seed) - 0.5) * 1.6);
-    ctx.fillStyle = seededNoise(i, 7, seed) > 0.48 ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  for (let i = 0; i < 26; i += 1) {
-    const startY = seededNoise(i, 12, seed) * canvas.height;
-    ctx.strokeStyle = seededNoise(i, 13, seed) > 0.5 ? 'rgba(255,255,255,.055)' : 'rgba(0,0,0,.07)';
-    ctx.lineWidth = 1 + seededNoise(i, 14, seed) * 3;
-    ctx.beginPath();
-    ctx.moveTo(-40, startY);
-    for (let x = 0; x <= canvas.width + 80; x += 120) {
-      ctx.lineTo(x, startY + Math.sin(x * 0.011 + i) * (10 + seededNoise(i, x, seed) * 20));
-    }
-    ctx.stroke();
-  }
-}
-
-function drawFabricTexture(base, highlight, seed = 8) {
-  const grad = ctx.createRadialGradient(canvas.width * 0.36, canvas.height * 0.26, 20, canvas.width * 0.5, canvas.height * 0.58, canvas.width * 0.75);
-  grad.addColorStop(0, highlight);
-  grad.addColorStop(1, base);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let i = -canvas.height; i < canvas.width; i += 18) {
-    ctx.strokeStyle = `rgba(255,255,255,${0.035 + seededNoise(i, 1, seed) * 0.045})`;
-    ctx.lineWidth = 9;
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.bezierCurveTo(i + 180, 260, i - 80, 610, i + canvas.height, canvas.height);
-    ctx.stroke();
-  }
-}
-
-function drawWoodTexture() {
-  const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  grad.addColorStop(0, '#8b5737');
-  grad.addColorStop(0.52, '#b97d50');
-  grad.addColorStop(1, '#704225');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < canvas.height; y += 28) {
-    ctx.strokeStyle = `rgba(55,25,10,${0.13 + seededNoise(y, 1, 21) * 0.11})`;
-    ctx.lineWidth = 2 + seededNoise(y, 2, 21) * 5;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    for (let x = 0; x <= canvas.width; x += 90) {
-      ctx.lineTo(x, y + Math.sin(x * 0.018 + y * 0.02) * 11);
-    }
-    ctx.stroke();
-  }
-}
-
-function drawBuiltInTexture(name) {
-  if (name === 'charcoalStone') return drawStoneTexture(['#151817', '#555b56', '#2a2e2b'], 2, 1.25);
-  if (name === 'warmLimestone') return drawStoneTexture(['#b9b2a7', '#eee9dc', '#8f887d'], 3, 0.75);
-  if (name === 'graphiteSlate') return drawStoneTexture(['#2a2f2d', '#8a908b', '#1d2220'], 5, 1.05);
-  if (name === 'walnutTable') return drawWoodTexture();
-  if (name === 'microcement') return drawStoneTexture(['#bfc0bb', '#f2efe6', '#a9aaa4'], 7, 0.58);
-  if (name === 'champagneLinen') return drawFabricTexture('#a77d4d', '#f1d9ad', 9);
-  if (name === 'emeraldVelvet') return drawFabricTexture('#06261b', '#0d7a5a', 10);
-  if (name === 'sandstone') return drawStoneTexture(['#c09161', '#f0ddbd', '#a97949'], 12, 0.8);
-  if (name === 'smokedGlass') return drawStoneTexture(['#080c0b', '#3b4642', '#111816'], 13, 1.1);
-  if (name === 'ivoryMarble') return drawStoneTexture(['#ffffff', '#ddd8ce', '#f8f4ea'], 15, 0.45);
-  return false;
-}
-
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('图片读取失败'));
-    image.src = url;
-  });
-}
-
-function setProgress(value, message) {
+function progressTo(value, text) {
   progress.classList.add('show');
   progress.classList.remove('error');
-  status.classList.remove('error');
-  progressText.textContent = message;
+  progressText.textContent = text;
   progressPercent.textContent = `${value}%`;
   progressBar.style.width = `${value}%`;
-}
-
-function clearProcessingState() {
-  progress.classList.remove('show', 'error');
-  status.classList.remove('error');
-  progressBar.style.width = '0%';
-  progressText.textContent = '正在准备';
-  progressPercent.textContent = '0%';
-  generate.classList.remove('needs-mode');
-  generate.innerHTML = '上传图片后开始合成 <span>→</span>';
-  generate.disabled = !sourceImage;
 }
 
 function resetDownload() {
@@ -170,80 +59,110 @@ function resetDownload() {
   resultUrl = '';
 }
 
-function drawBackground() {
-  if (drawBuiltInTexture(template) !== false) {
-    return;
+function imageFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('图片读取失败'));
+    image.src = url;
+  });
+}
+
+function drawLowAngleBackdrop(top, mid, floor, seed, contrast = 1) {
+  const horizon = Math.floor(canvas.height * 0.42);
+  let gradient = ctx.createLinearGradient(0, 0, 0, horizon);
+  gradient.addColorStop(0, top);
+  gradient.addColorStop(1, mid);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, horizon);
+
+  gradient = ctx.createLinearGradient(0, horizon, canvas.width, canvas.height);
+  gradient.addColorStop(0, mid);
+  gradient.addColorStop(1, floor);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
+
+  for (let i = 0; i < 780; i += 1) {
+    const x = noise(i, 1, seed) * canvas.width;
+    const y = noise(i, 2, seed) * canvas.height;
+    const alpha = (0.015 + noise(i, 3, seed) * 0.075) * (y < horizon ? 0.36 : 1) * contrast;
+    const rx = (1 + noise(i, 4, seed) * 8) * (y < horizon ? 2.2 : 1);
+    const ry = 0.5 + noise(i, 5, seed) * 3;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((noise(i, 6, seed) - 0.5) * 0.8);
+    ctx.fillStyle = noise(i, 7, seed) > 0.48 ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
-  if (backgroundImage && backgroundImage.complete && backgroundImage.naturalWidth) {
-    ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
-    return;
+  for (let i = 0; i < 140; i += 1) {
+    const x = -80 + noise(i, 11, seed) * (canvas.width + 160);
+    const y = horizon + noise(i, 12, seed) * (canvas.height - horizon);
+    const length = 35 + noise(i, 13, seed) * 220;
+    const angle = (noise(i, 14, seed) - 0.5) * 0.22;
+    const alpha = 0.035 + noise(i, 15, seed) * 0.08;
+    ctx.strokeStyle = noise(i, 16, seed) > 0.45 ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
+    ctx.lineWidth = 0.7 + noise(i, 17, seed) * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    ctx.stroke();
   }
 
-  if (backgroundImage && backgroundImage.complete && !backgroundImage.naturalWidth) {
-    backgroundImage = null;
-    template = 'studio';
-    status.textContent = '背景素材加载失败，已切换为纯色背景';
-  }
+  let seam = ctx.createLinearGradient(0, horizon - 18, 0, horizon + 90);
+  seam.addColorStop(0, 'rgba(255,255,255,0)');
+  seam.addColorStop(0.48, 'rgba(0,0,0,.18)');
+  seam.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = seam;
+  ctx.fillRect(0, horizon - 18, canvas.width, 108);
 
-  if (template === 'wood') {
-    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    grad.addColorStop(0, '#d2a477');
-    grad.addColorStop(1, '#a96e45');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = 'rgba(85,42,20,.16)';
-    ctx.lineWidth = 7;
-    for (let y = 0; y < canvas.height; y += 55) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y + 20);
-      ctx.stroke();
-    }
-    return;
-  }
-
-  if (template === 'blue') {
-    const grad = ctx.createRadialGradient(canvas.width * 0.72, canvas.height * 0.18, 10, canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.8);
-    grad.addColorStop(0, '#e8f6f5');
-    grad.addColorStop(1, '#8ab7bd');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    return;
-  }
-
-  if (template === 'sunset') {
-    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    grad.addColorStop(0, '#f3d1a9');
-    grad.addColorStop(0.5, '#d98472');
-    grad.addColorStop(1, '#8b5a68');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    return;
-  }
-
-  ctx.fillStyle = backgroundColor;
+  const spotlight = ctx.createRadialGradient(canvas.width * 0.52, canvas.height * 0.66, 10, canvas.width * 0.52, canvas.height * 0.66, canvas.width * 0.42);
+  spotlight.addColorStop(0, 'rgba(255,255,255,.16)');
+  spotlight.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = spotlight;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'rgba(25,48,37,.06)';
-  ctx.fillRect(0, canvas.height * 0.68, canvas.width, canvas.height * 0.32);
-  ctx.fillStyle = 'rgba(255,255,255,.7)';
-  ctx.fillRect(0, canvas.height * 0.675, canvas.width, 5);
+
+  const vignette = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.56, canvas.width * 0.26, canvas.width * 0.5, canvas.height * 0.56, canvas.width * 0.78);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,.2)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawTemplate() {
+  if (bgImage && bgImage.complete && bgImage.naturalWidth) {
+    ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+    return;
+  }
+  if (template === 'darkGraphitePhoto') drawLowAngleBackdrop('#717a73', '#454b47', '#222725', 31, 1.15);
+  else if (template === 'warmLimestonePhoto') drawLowAngleBackdrop('#e7ddca', '#b6ab98', '#817766', 32, 0.88);
+  else if (template === 'champagneTravertinePhoto') drawLowAngleBackdrop('#f0d2a6', '#c69a61', '#8d6437', 33, 0.9);
+  else if (template === 'smokedSlatePhoto') drawLowAngleBackdrop('#56615d', '#303836', '#101413', 34, 1.2);
+  else if (template === 'greenGrayPhoto') drawLowAngleBackdrop('#9cad9f', '#657d70', '#2e4239', 35, 0.95);
+  else if (template === 'ivoryMarblePhoto') drawLowAngleBackdrop('#faf5ea', '#ded6c7', '#bbb2a3', 36, 0.72);
+  else {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 }
 
 function render() {
-  if (!subjectCanvas) return;
+  if (!subjectImage) return;
   canvas.hidden = false;
   empty.hidden = true;
   canvas.width = 1000;
   canvas.height = 1000;
-  drawBackground();
+  drawTemplate();
 
-  const subjectWidth = subjectCanvas.naturalWidth || subjectCanvas.width;
-  const subjectHeight = subjectCanvas.naturalHeight || subjectCanvas.height;
-  const base = Math.min(canvas.width, canvas.height) * 0.58 * scale;
-  const ratio = subjectHeight / subjectWidth;
-  const drawWidth = ratio > 1 ? base / ratio : base;
-  const drawHeight = ratio > 1 ? base : base * ratio;
+  const sw = subjectImage.naturalWidth || subjectImage.width;
+  const sh = subjectImage.naturalHeight || subjectImage.height;
+  const base = canvas.width * 0.58 * scale;
+  const ratio = sh / sw;
+  const dw = ratio > 1 ? base / ratio : base;
+  const dh = ratio > 1 ? base : base * ratio;
   const cx = canvas.width / 2 + offsetX;
   const cy = canvas.height / 2 + offsetY;
 
@@ -251,11 +170,11 @@ function render() {
   ctx.translate(cx, cy);
   ctx.rotate(rotation * Math.PI / 180);
   if (hasShadow) {
-    ctx.shadowColor = 'rgba(20,37,27,.25)';
+    ctx.shadowColor = 'rgba(15,25,20,.26)';
     ctx.shadowBlur = 28;
     ctx.shadowOffsetY = 18;
   }
-  ctx.drawImage(subjectCanvas, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  ctx.drawImage(subjectImage, -dw / 2, -dh / 2, dw, dh);
   ctx.restore();
 }
 
@@ -264,197 +183,131 @@ async function prepare(file) {
     status.textContent = '请选择 JPG、PNG 或 WEBP 图片';
     return;
   }
-
   if (sourceUrl) URL.revokeObjectURL(sourceUrl);
   sourceUrl = URL.createObjectURL(file);
-
-  try {
-    sourceImage = await loadImage(sourceUrl);
-    subjectCanvas = sourceImage;
-    drop.className = 'drop has-image';
-    drop.innerHTML = `<img src="${sourceUrl}" alt="已上传商品图">`;
-    replace.hidden = false;
-    generate.disabled = false;
-    resetDownload();
-    clearProcessingState();
-    status.textContent = subjectMode === 'professional' ? '图片已就绪，可使用专业抠图合成' : '图片已就绪，可开始合成';
-    render();
-  } catch (error) {
-    status.textContent = error.message || '图片读取失败，请换一张试试';
-  }
+  sourceImage = await imageFromUrl(sourceUrl);
+  subjectImage = sourceImage;
+  drop.className = 'drop has-image';
+  drop.innerHTML = `<img src="${sourceUrl}" alt="已上传商品图">`;
+  replace.hidden = false;
+  generate.disabled = false;
+  resetDownload();
+  progress.classList.remove('show', 'error');
+  status.textContent = '图片已就绪，可开始合成';
+  render();
 }
 
-async function getProfessionalCutout() {
-  if (!sourceUrl) throw new Error('请先上传商品图片');
-  const input = await fetch(sourceUrl).then((response) => response.blob());
+async function professionalCutout() {
+  const blob = await fetch(sourceUrl).then((r) => r.blob());
   const response = await fetch('/api/remove-bg', {
     method: 'POST',
-    headers: { 'Content-Type': input.type || 'image/jpeg' },
-    body: input,
+    headers: { 'Content-Type': blob.type || 'image/jpeg' },
+    body: blob,
   });
-  if (!response.ok) {
-    let message = '专业抠图失败';
-    try {
-      message = (await response.json()).error || message;
-    } catch {}
-    throw new Error(message);
-  }
-  const blob = await response.blob();
-  const cutoutUrl = URL.createObjectURL(blob);
+  if (!response.ok) throw new Error('专业抠图失败');
+  const cutoutBlob = await response.blob();
+  const url = URL.createObjectURL(cutoutBlob);
   try {
-    return await loadImage(cutoutUrl);
+    return await imageFromUrl(url);
   } finally {
-    URL.revokeObjectURL(cutoutUrl);
+    URL.revokeObjectURL(url);
   }
 }
 
-async function composeEnhanced() {
+async function compose() {
   if (!sourceImage) {
     fileInput.click();
     return;
   }
-
   generate.disabled = true;
   resetDownload();
-  setProgress(12, '正在准备商品主体');
+  progressTo(20, '正在准备商品主体');
   await new Promise((resolve) => requestAnimationFrame(resolve));
-  setProgress(45, '正在处理背景');
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-
-  if (subjectMode === 'professional') {
-    setProgress(60, '正在连接专业抠图');
+  if (mode === 'professional') {
+    progressTo(55, '正在连接专业抠图');
     try {
-      subjectCanvas = await getProfessionalCutout();
-      status.textContent = '专业抠图完成，已生成换背景效果';
+      subjectImage = await professionalCutout();
+      status.textContent = '专业抠图完成，已生成轻奢背景效果';
     } catch (error) {
-      subjectCanvas = sourceImage;
-      status.textContent = '专业抠图暂时不可用，已保留原图完成合成';
+      subjectImage = sourceImage;
+      status.textContent = '专业抠图暂时不可用，已保留原图合成';
     }
   } else {
-    subjectCanvas = sourceImage;
-    status.textContent = subjectMode === 'local' ? '本地模式已保留原图合成，适合实拍质感背景预览' : '已保留原图合成';
+    subjectImage = sourceImage;
+    status.textContent = mode === 'local' ? '本地模式已保留原图合成，适合实拍质感背景预览' : '已保留原图合成';
   }
-
+  progressTo(78, '正在生成实拍风格背景');
   render();
-  setProgress(85, '正在生成下载文件');
   await new Promise((resolve) => requestAnimationFrame(resolve));
+  progressTo(92, '正在生成下载文件');
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   resultUrl = URL.createObjectURL(blob);
   download.href = resultUrl;
-  download.download = 'background-composite.png';
+  download.download = 'jewelry-background-composite.png';
   download.classList.remove('disabled');
   download.setAttribute('aria-disabled', 'false');
-  setProgress(100, '合成完成');
+  progressTo(100, '合成完成');
   generate.disabled = false;
 }
 
-function loadBackgroundAsset(url) {
-  const image = new Image();
-  image.onload = () => {
-    backgroundImage = image;
-    status.textContent = '背景素材已加载';
-    render();
-  };
-  image.onerror = () => {
-    backgroundImage = null;
-    template = 'studio';
-    status.textContent = '背景素材加载失败，已使用纯色背景';
-    render();
-  };
-  image.src = url;
-}
+$('#templates').innerHTML = templates.map(([value, label, css], index) => (
+  `<button class="template asset${index === 0 ? ' selected' : ''}" data-template="${value}" type="button" style="background:${css}"><span>${label}</span></button>`
+)).join('');
 
 drop.addEventListener('click', () => fileInput.click());
 replace.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (event) => prepare(event.target.files[0]));
+fileInput.addEventListener('change', (event) => prepare(event.target.files[0]).catch((error) => status.textContent = error.message));
 drop.addEventListener('dragover', (event) => event.preventDefault());
 drop.addEventListener('drop', (event) => {
   event.preventDefault();
-  prepare(event.dataTransfer.files[0]);
+  prepare(event.dataTransfer.files[0]).catch((error) => status.textContent = error.message);
 });
 
-const subjectModePanel = document.querySelector('#subjectMode');
-if (subjectModePanel && !subjectModePanel.querySelector('[data-value="professional"]')) {
-  const professionalButton = document.createElement('button');
-  professionalButton.type = 'button';
-  professionalButton.dataset.value = 'professional';
-  professionalButton.textContent = '专业抠图';
-  subjectModePanel.appendChild(professionalButton);
-}
-
-subjectModePanel.addEventListener('click', (event) => {
+$('#subjectMode').addEventListener('click', (event) => {
   if (event.target.tagName !== 'BUTTON') return;
-  subjectMode = event.target.dataset.value;
-  subjectModePanel.querySelectorAll('button').forEach((button) => button.classList.toggle('selected', button === event.target));
-  if (sourceImage) {
-    subjectCanvas = sourceImage;
-    clearProcessingState();
-    status.textContent = subjectMode === 'professional' ? '已切换为专业抠图，合成时会调用 remove.bg' : '已切换处理方式';
-    render();
-  }
-});
-
-document.querySelector('#swatches').addEventListener('click', (event) => {
-  if (event.target.tagName !== 'BUTTON') return;
-  backgroundColor = event.target.dataset.color;
-  backgroundUrl = '';
-  backgroundImage = null;
-  template = 'studio';
-  document.querySelectorAll('.swatch').forEach((button) => button.classList.toggle('selected', button === event.target));
-  document.querySelectorAll('.template').forEach((button) => button.classList.remove('selected'));
+  mode = event.target.dataset.value;
+  $('#subjectMode').querySelectorAll('button').forEach((button) => button.classList.toggle('selected', button === event.target));
+  subjectImage = sourceImage || subjectImage;
   render();
 });
 
-const photoTemplateGrid = document.querySelector('#templates');
-if (photoTemplateGrid) {
-  photoTemplateGrid.innerHTML = photoTemplateData.map(([value, label, css], index) => {
-    return `<button class="template asset${index === 0 ? ' selected' : ''}" data-template="${value}" type="button" style="background:${css}"><span>${label}</span></button>`;
-  }).join('');
-  template = photoTemplateData[0][0];
-}
-
-document.querySelector('#templates').addEventListener('click', (event) => {
+$('#templates').addEventListener('click', (event) => {
   const button = event.target.closest('.template');
   if (!button) return;
-  const asset = button.dataset.background;
-  template = button.dataset.template || 'asset';
-  backgroundUrl = '';
-  backgroundImage = null;
-  document.querySelectorAll('.template').forEach((item) => item.classList.toggle('selected', item === button));
-  document.querySelectorAll('.swatch').forEach((item) => item.classList.remove('selected'));
-  if (asset) loadBackgroundAsset(asset);
-  else render();
+  template = button.dataset.template || template;
+  bgImage = null;
+  $('#templates').querySelectorAll('.template').forEach((item) => item.classList.toggle('selected', item === button));
+  render();
 });
 
-bgFile.addEventListener('change', (event) => {
+bgFile.addEventListener('change', async (event) => {
   const file = event.target.files[0];
   if (!file) return;
-  if (backgroundUrl) URL.revokeObjectURL(backgroundUrl);
-  backgroundUrl = URL.createObjectURL(file);
-  template = 'custom';
-  document.querySelectorAll('.template,.swatch').forEach((button) => button.classList.remove('selected'));
-  loadBackgroundAsset(backgroundUrl);
+  const url = URL.createObjectURL(file);
+  bgImage = await imageFromUrl(url);
+  $('#templates').querySelectorAll('.template').forEach((item) => item.classList.remove('selected'));
+  render();
 });
 
-document.querySelector('#scale').addEventListener('input', (event) => {
+$('#scale').addEventListener('input', (event) => {
   scale = Number(event.target.value) / 100;
-  document.querySelector('#scaleValue').textContent = `${event.target.value}%`;
+  $('#scaleValue').textContent = `${event.target.value}%`;
   render();
 });
 
-document.querySelector('#rotate').addEventListener('input', (event) => {
+$('#rotate').addEventListener('input', (event) => {
   rotation = Number(event.target.value);
-  document.querySelector('#rotateValue').textContent = `${rotation}°`;
+  $('#rotateValue').textContent = `${rotation}°`;
   render();
 });
 
-document.querySelector('#shadow').addEventListener('click', (event) => {
+$('#shadow').addEventListener('click', (event) => {
   hasShadow = !hasShadow;
   event.currentTarget.classList.toggle('on', hasShadow);
   render();
 });
 
-generate.addEventListener('click', () => composeEnhanced().catch((error) => {
+generate.addEventListener('click', () => compose().catch((error) => {
   generate.disabled = false;
   status.textContent = error.message || '合成失败，请重试';
   progress.classList.add('show', 'error');
@@ -464,20 +317,15 @@ generate.addEventListener('click', () => composeEnhanced().catch((error) => {
 }));
 
 download.addEventListener('click', (event) => {
-  if (download.classList.contains('disabled') || !resultUrl) {
-    event.preventDefault();
-    return;
-  }
-  status.textContent = '下载已开始';
+  if (download.classList.contains('disabled') || !resultUrl) event.preventDefault();
 });
 
 canvas.addEventListener('pointerdown', (event) => {
-  if (!subjectCanvas) return;
+  if (!subjectImage) return;
   dragging = true;
   canvas.setPointerCapture(event.pointerId);
   canvas._dragStart = [event.clientX, event.clientY, offsetX, offsetY];
 });
-
 canvas.addEventListener('pointermove', (event) => {
   if (!dragging) return;
   const [sx, sy, ox, oy] = canvas._dragStart;
@@ -485,7 +333,4 @@ canvas.addEventListener('pointermove', (event) => {
   offsetY = oy + (event.clientY - sy) * canvas.height / canvas.getBoundingClientRect().height;
   render();
 });
-
-canvas.addEventListener('pointerup', () => {
-  dragging = false;
-});
+canvas.addEventListener('pointerup', () => dragging = false);
