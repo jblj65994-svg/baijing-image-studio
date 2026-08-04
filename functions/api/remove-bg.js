@@ -4,13 +4,24 @@ export async function onRequestPost({ request, env }) {
     return Response.json({ error: "未配置 remove.bg API 密钥" }, { status: 503 });
   }
 
-  const incoming = await request.arrayBuffer();
-  if (!incoming.byteLength) {
+  let image = null;
+  try {
+    const incoming = await request.formData();
+    image = incoming.get("image_file");
+  } catch {
+    return Response.json({ error: "上传格式不正确，请重新选择图片" }, { status: 400 });
+  }
+
+  if (!(image instanceof File) && !(image instanceof Blob)) {
     return Response.json({ error: "请先上传图片" }, { status: 400 });
   }
 
+  if (!image.size) {
+    return Response.json({ error: "图片文件为空，请重新选择图片" }, { status: 400 });
+  }
+
   const form = new FormData();
-  form.append("image_file", new Blob([incoming], { type: request.headers.get("content-type") || "image/jpeg" }), "upload.jpg");
+  form.append("image_file", image, image.name || "upload.png");
   form.append("size", "auto");
 
   const response = await fetch("https://api.remove.bg/v1.0/removebg", {
@@ -21,7 +32,10 @@ export async function onRequestPost({ request, env }) {
 
   if (!response.ok) {
     const detail = await response.text();
-    return Response.json({ error: `remove.bg 处理失败（${response.status}）`, detail }, { status: response.status });
+    return Response.json(
+      { error: `remove.bg 处理失败（${response.status}）`, detail },
+      { status: response.status },
+    );
   }
 
   return new Response(response.body, {
