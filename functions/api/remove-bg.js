@@ -20,8 +20,16 @@ export async function onRequestPost({ request, env }) {
     return Response.json({ error: "图片文件为空，请重新选择图片" }, { status: 400 });
   }
 
+  const imageBytes = await image.arrayBuffer();
+  const imageType = image.type || "image/png";
+  const extension = imageType.includes("jpeg") || imageType.includes("jpg") ? "jpg" : "png";
+
   const form = new FormData();
-  form.append("image_file", image, image.name || "upload.png");
+  form.append(
+    "image_file",
+    new Blob([imageBytes], { type: imageType }),
+    image.name || `upload.${extension}`,
+  );
   form.append("size", "auto");
 
   const response = await fetch("https://api.remove.bg/v1.0/removebg", {
