@@ -1,3 +1,5 @@
+const VERSION = '20260805i';
+
 const file = document.querySelector('#file');
 const drop = document.querySelector('#drop');
 const replace = document.querySelector('#replace');
@@ -14,12 +16,26 @@ let result = null;
 let size = '1000 × 1000';
 let hasShadow = true;
 
-document.querySelector('.note b').textContent = '专业抠图已启用';
-document.querySelector('.note p').textContent = '优先使用 remove.bg 去除背景并生成白底图；如果接口暂时不可用，才会退回本地合成。';
+const noteTitle = document.querySelector('.note b');
+const noteText = document.querySelector('.note p');
+if (noteTitle) noteTitle.textContent = '专业抠图已启用';
+if (noteText) noteText.textContent = '优先使用 remove.bg 去除背景并生成白底图；如果接口失败，会明确提示失败，不再用原图假装成功。';
+
+const versionBadge = document.createElement('div');
+versionBadge.textContent = `版本 ${VERSION}`;
+versionBadge.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:20;background:#1f6a4a;color:#fff;font-size:11px;padding:5px 8px;border-radius:2px;opacity:.9';
+document.body.appendChild(versionBadge);
 
 function setStatus(message, error = false) {
   statusText.textContent = message;
   statusText.parentElement?.classList.toggle('error', error);
+  statusText.parentElement?.style.setProperty('color', error ? '#b24a3a' : '#809087');
+}
+
+function setResultCopy(label, title, text) {
+  document.querySelector('#result-label').textContent = label;
+  document.querySelector('#result-title').textContent = title;
+  document.querySelector('#result-text').textContent = text;
 }
 
 function loadImage(url) {
@@ -31,11 +47,11 @@ function loadImage(url) {
   });
 }
 
-function showProgress(percent, message) {
+function showProgress(percent, message, error = false) {
   preview.innerHTML = '<div style="width:76%;text-align:center;color:#66756c">'
-    + '<div style="font-size:13px;font-weight:700;margin-bottom:12px">正在处理 ' + percent + '%</div>'
-    + '<div style="height:8px;background:#e3e9e4;border-radius:999px;overflow:hidden"><i style="display:block;width:' + percent + '%;height:100%;background:#1f6a4a;transition:width .25s"></i></div>'
-    + '<p style="font-size:12px;margin:12px 0 0;color:#849087">' + message + '</p></div>';
+    + `<div style="font-size:13px;font-weight:700;margin-bottom:12px">${error ? '处理失败' : '正在处理'} ${percent}%</div>`
+    + `<div style="height:8px;background:#e3e9e4;border-radius:999px;overflow:hidden"><i style="display:block;width:${percent}%;height:100%;background:${error ? '#b24a3a' : '#1f6a4a'};transition:width .25s"></i></div>`
+    + `<p style="font-size:12px;margin:12px 0 0;color:${error ? '#b24a3a' : '#849087'}">${message}</p></div>`;
 }
 
 function nextPaint() {
@@ -44,18 +60,25 @@ function nextPaint() {
 
 function load(input) {
   if (!input || !input.type.startsWith('image/')) return;
+  if (input.size > 20 * 1024 * 1024) {
+    setStatus('图片超过 20MB，请换一张更小的图片', true);
+    return;
+  }
+
   sourceFile = input;
   const reader = new FileReader();
   reader.onload = () => {
     source = reader.result;
     result = null;
     drop.className = 'drop has-image';
-    drop.innerHTML = '<img src="' + source + '" alt="已上传商品图">';
+    drop.innerHTML = `<img src="${source}" alt="已上传商品图">`;
     replace.hidden = false;
     generate.innerHTML = '生成白底主图 <span>→</span>';
     generate.disabled = false;
     download.disabled = true;
-    setStatus('图片已就绪，将优先使用专业抠图生成白底图');
+    setStatus('图片已就绪，将使用专业抠图生成白底主图');
+    setResultCopy('等待处理', '准备好开始了吗？', '点击生成后，会先进行专业抠图；抠图成功后才会生成可下载白底图。');
+    preview.innerHTML = '<div class="empty"><span>✦</span><p>你的白底主图会显示在这里</p></div>';
     document.querySelector('#step2').classList.add('active');
   };
   reader.readAsDataURL(input);
@@ -82,11 +105,11 @@ function renderWhiteCanvas(product) {
 
   if (hasShadow) {
     context.save();
-    context.globalAlpha = 0.18;
-    context.filter = `blur(${Math.max(5, width * 0.012)}px)`;
+    context.globalAlpha = 0.16;
+    context.filter = `blur(${Math.max(6, width * 0.013)}px)`;
     context.fillStyle = '#26332b';
     context.beginPath();
-    context.ellipse(width / 2, y + drawHeight * 0.93, drawWidth * 0.27, Math.max(5, drawHeight * 0.035), 0, 0, Math.PI * 2);
+    context.ellipse(width / 2, y + drawHeight * 0.93, drawWidth * 0.28, Math.max(5, drawHeight * 0.035), 0, 0, Math.PI * 2);
     context.fill();
     context.restore();
   }
@@ -97,26 +120,91 @@ function renderWhiteCanvas(product) {
   return canvas.toDataURL('image/jpeg', 0.96);
 }
 
+function validateTransparentCutout(product) {
+  const sampleSize = 160;
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  canvas.width = sampleSize;
+  canvas.height = sampleSize;
+  context.clearRect(0, 0, sampleSize, sampleSize);
+  context.drawImage(product, 0, 0, sampleSize, sampleSize);
+  const pixels = context.getImageData(0, 0, sampleSize, sampleSize).data;
+  let transparent = 0;
+  let opaque = 0;
+  for (let i = 3; i < pixels.length; i += 4) {
+    if (pixels[i] < 10) transparent += 1;
+    if (pixels[i] > 220) opaque += 1;
+  }
+  const total = sampleSize * sampleSize;
+  const transparentRatio = transparent / total;
+  const opaqueRatio = opaque / total;
+
+  if (transparentRatio < 0.08) {
+    throw new Error('专业抠图没有返回透明背景，请稍后重试或换一张主体更清晰的图片');
+  }
+  if (opaqueRatio < 0.003) {
+    throw new Error('没有识别到足够清晰的商品主体，请换一张主体更大的图片');
+  }
+}
+
+async function readErrorMessage(response) {
+  const type = response.headers.get('content-type') || '';
+  if (type.includes('application/json')) {
+    try {
+      const data = await response.json();
+      return data.error || data.message || JSON.stringify(data);
+    } catch {
+      return '';
+    }
+  }
+  try {
+    return await response.text();
+  } catch {
+    return '';
+  }
+}
+
 async function createProfessionalWhiteBackground() {
-  const response = await fetch('/api/remove-bg', {
-    method: 'POST',
-    headers: { 'Content-Type': sourceFile.type || 'image/jpeg' },
-    body: sourceFile,
-  });
-  if (!response.ok) throw new Error('remove.bg 处理失败');
+  const form = new FormData();
+  form.append('image_file', sourceFile, sourceFile.name || 'upload.jpg');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  let response;
+  try {
+    response = await fetch('/api/remove-bg', {
+      method: 'POST',
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('专业抠图超时，请稍后再试');
+    throw new Error('无法连接专业抠图服务，请检查部署环境或稍后再试');
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    const detail = await readErrorMessage(response);
+    throw new Error(detail ? `专业抠图失败：${detail}` : `专业抠图失败：接口返回 ${response.status}`);
+  }
+
+  const type = response.headers.get('content-type') || '';
+  if (!type.includes('image/')) {
+    throw new Error('专业抠图没有返回图片结果');
+  }
+
   const transparentProduct = await response.blob();
+  if (!transparentProduct.size) throw new Error('专业抠图返回了空图片');
+
   const cutoutUrl = URL.createObjectURL(transparentProduct);
   try {
     const cutout = await loadImage(cutoutUrl);
+    validateTransparentCutout(cutout);
     return renderWhiteCanvas(cutout);
   } finally {
     URL.revokeObjectURL(cutoutUrl);
   }
-}
-
-async function createFallbackWhiteBackground() {
-  const image = await loadImage(source);
-  return renderWhiteCanvas(image);
 }
 
 file.onchange = (event) => load(event.target.files[0]);
@@ -145,10 +233,13 @@ generate.onclick = async () => {
     file.click();
     return;
   }
+
+  result = null;
   generate.disabled = true;
   generate.innerHTML = '正在生成…';
   download.disabled = true;
   setStatus('正在准备图片…');
+  setResultCopy('正在处理', '正在专业抠图', '正在连接 remove.bg 去除背景，完成后会自动生成白底主图。');
   showProgress(15, '读取原图');
 
   try {
@@ -157,23 +248,19 @@ generate.onclick = async () => {
     result = await createProfessionalWhiteBackground();
     showProgress(92, '正在生成下载文件');
     await nextPaint();
-    preview.innerHTML = '<img src="' + result + '" alt="生成的白底商品图">';
+    preview.innerHTML = `<img src="${result}" alt="生成的白底商品图">`;
     setStatus('专业抠图完成，白底主图已生成');
-    document.querySelector('#result-label').textContent = '专业抠图完成';
-    document.querySelector('#result-title').textContent = '一张干净的白底商品图';
-    document.querySelector('#result-text').textContent = '背景已由 remove.bg 移除，并按 ' + size + ' 像素生成。';
+    setResultCopy('专业抠图完成', '一张干净的白底商品图', `背景已由 remove.bg 移除，并按 ${size} 像素生成。`);
     download.disabled = false;
     document.querySelector('#step3').classList.add('active');
   } catch (error) {
     console.error(error);
-    showProgress(72, '专业抠图失败，正在保底生成白底图');
-    result = await createFallbackWhiteBackground();
-    preview.innerHTML = '<img src="' + result + '" alt="生成的白底商品图">';
-    setStatus('专业抠图暂时失败，已先保留原图生成白底图', true);
-    document.querySelector('#result-label').textContent = '保底结果';
-    document.querySelector('#result-title').textContent = '已生成可下载结果';
-    document.querySelector('#result-text').textContent = '当前没有成功调用 remove.bg，因此只是白底画布合成；请稍后重试专业抠图。';
-    download.disabled = false;
+    result = null;
+    showProgress(0, error.message || '专业抠图没有完成', true);
+    preview.innerHTML = '<div class="empty"><span>!</span><p>专业抠图没有完成，未生成下载图</p></div>';
+    setStatus(error.message || '专业抠图失败，没有生成白底图', true);
+    setResultCopy('处理失败', '专业抠图没有完成', '这次没有拿到可用的透明商品主体，所以不会生成假结果。请重试，或换一张主体更清晰、背景更简单的图片。');
+    download.disabled = true;
   } finally {
     generate.disabled = false;
     generate.innerHTML = '重新生成 <span>→</span>';
