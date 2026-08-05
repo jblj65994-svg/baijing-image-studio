@@ -216,11 +216,13 @@ async function processSubject() {
     setProgress('主体处理完成，可以合成', 70);
     setStatus(mode === 'professional' ? '专业抠图完成，可以开始合成' : '保留原图模式，可以开始合成');
     draw();
+    return true;
   } catch (err) {
     if (token !== processId) return;
     resetResult();
     setProgress('主体处理失败，不能合成', 0, true);
     setStatus(`处理失败：${err.message}`, true);
+    return false;
   }
 }
 
@@ -233,7 +235,15 @@ async function loadFile(file) {
   drop.className = 'drop has-image';
   drop.innerHTML = `<img src="${sourceUrl}" alt="已上传商品图">`;
   replace.hidden = false;
-  await processSubject();
+  subjectImage = null;
+  canvas.hidden = true;
+  empty.hidden = false;
+  download.classList.add('disabled');
+  download.setAttribute('aria-disabled', 'true');
+  download.removeAttribute('href');
+  generate.disabled = false;
+  setProgress('等待开始合成', 0);
+  setStatus('图片已上传，请确认模式和背景后点击“开始合成”');
 }
 
 async function selectBackground(src, btn) {
@@ -269,7 +279,17 @@ subjectMode.onclick = (e) => {
   [...subjectMode.children].forEach((b) => b.classList.remove('selected'));
   btn.classList.add('selected');
   mode = btn.dataset.value;
-  processSubject();
+  subjectImage = null;
+  download.classList.add('disabled');
+  download.setAttribute('aria-disabled', 'true');
+  download.removeAttribute('href');
+  if (sourceFile) {
+    canvas.hidden = true;
+    empty.hidden = false;
+    generate.disabled = false;
+    setProgress('已切换模式，等待开始合成', 0);
+    setStatus('已切换主体处理模式，请点击“开始合成”');
+  }
 };
 swatches.onclick = (e) => {
   const btn = e.target.closest('.swatch');
@@ -284,16 +304,27 @@ swatches.onclick = (e) => {
 scale.oninput = () => { scaleValue.textContent = `${scale.value}%`; draw(); };
 rotate.oninput = () => { rotateValue.textContent = `${rotate.value}°`; draw(); };
 shadow.onclick = () => { useShadow = !useShadow; shadow.classList.toggle('on', useShadow); draw(); };
-generate.onclick = () => {
+generate.onclick = async () => {
   if (!sourceFile) return fileInput.click();
+  generate.disabled = true;
+  download.classList.add('disabled');
+  download.setAttribute('aria-disabled', 'true');
+  download.removeAttribute('href');
+  const ok = await processSubject();
+  if (!ok || !subjectImage) {
+    generate.disabled = false;
+    return;
+  }
   if (!subjectImage) {
     setProgress('主体没处理成功，不能合成', 0, true);
     setStatus('没有透明商品主体，已停止合成', true);
+    generate.disabled = false;
     return;
   }
   draw(true);
   setProgress('合成完成', 100);
   setStatus('合成完成，可以下载');
+  generate.disabled = false;
 };
 download.onclick = (e) => {
   if (download.classList.contains('disabled')) e.preventDefault();
