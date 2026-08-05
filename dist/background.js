@@ -1,222 +1,322 @@
 const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
-const state = {
-  file: null,
-  sourceUrl: '',
-  subjectUrl: '',
-  backgroundUrl: './assets/backgrounds/luxury-02-charcoal-marble.png',
-  bgColor: '#ffffff',
-  mode: 'professional',
-  scale: 90,
-  rotation: 0,
-  shadow: true,
-  busy: false,
-  job: 0,
-  resultUrl: '',
-};
+const fileInput = $('#file');
+const bgFile = $('#bgFile');
+const drop = $('#drop');
+const replace = $('#replace');
+const canvas = $('#canvas');
+const empty = $('#empty');
+const generate = $('#generate');
+const download = $('#download');
+const statusLine = $('#statusLine');
+const statusText = $('#status');
+const progress = $('#progress');
+const progressText = $('#progressText');
+const progressPercent = $('#progressPercent');
+const progressBar = $('#progressBar');
+const templates = $('#templates');
+const swatches = $('#swatches');
+const subjectMode = $('#subjectMode');
+const scale = $('#scale');
+const rotate = $('#rotate');
+const scaleValue = $('#scaleValue');
+const rotateValue = $('#rotateValue');
+const shadow = $('#shadow');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-const els = {
-  drop: $('#drop'), file: $('#file'), replace: $('#replace'), canvas: $('#canvas'), empty: $('#empty'),
-  status: $('#status'), statusLine: $('#statusLine'), progress: $('#progress'), progressText: $('#progressText'),
-  progressPercent: $('#progressPercent'), progressBar: $('#progressBar'), download: $('#download'), generate: $('#generate'),
-  scale: $('#scale'), rotate: $('#rotate'), scaleValue: $('#scaleValue'), rotateValue: $('#rotateValue'), shadow: $('#shadow'),
-  bgFile: $('#bgFile'), modeTitle: $('#modeTitle'), modeNote: $('#modeNote')
-};
+const BACKGROUNDS = [
+  ['炭灰岩面', './assets/backgrounds/final-premium/charcoal-slate.jpg'],
+  ['暖灰洞石', './assets/backgrounds/final-premium/warm-travertine.jpg'],
+  ['旧化香槟金属', './assets/backgrounds/final-premium/aged-champagne-metal.jpg'],
+  ['绿灰微水泥', './assets/backgrounds/final-premium/sage-microcement.jpg'],
+  ['象牙石材', './assets/backgrounds/final-premium/ivory-stone.jpg'],
+  ['烟熏黑石', './assets/backgrounds/final-premium/smoky-black-stone.jpg'],
+];
+
+let sourceFile = null;
+let sourceUrl = '';
+let sourceImage = null;
+let subjectImage = null;
+let bgImage = null;
+let bgColor = '#ffffff';
+let mode = 'professional';
+let useShadow = true;
+let pos = { x: 0, y: 120 };
+let drag = null;
+let processId = 0;
 
 function setStatus(text, error = false) {
-  els.status.textContent = text;
-  els.statusLine.classList.toggle('error', error);
-  els.progress.classList.toggle('error', error);
+  statusText.textContent = text;
+  statusLine.classList.toggle('error', error);
 }
 
-function setProgress(percent, text) {
-  els.progress.classList.add('show');
-  els.progressBar.style.width = `${percent}%`;
-  els.progressPercent.textContent = `${percent}%`;
-  els.progressText.textContent = text;
+function setProgress(text, pct, error = false) {
+  progress.classList.add('show');
+  progress.classList.toggle('error', error);
+  progressText.textContent = text;
+  progressPercent.textContent = `${pct}%`;
+  progressBar.style.width = `${pct}%`;
 }
 
-function resetResult(message = '图片已就绪，点击开始合成') {
-  state.resultUrl = '';
-  state.subjectUrl = '';
-  els.canvas.hidden = true;
-  els.empty.hidden = false;
-  els.download.classList.add('disabled');
-  els.download.setAttribute('aria-disabled', 'true');
-  els.download.removeAttribute('href');
-  setProgress(0, '等待处理');
-  els.progress.classList.remove('show', 'error');
-  setStatus(message, false);
+function resetResult() {
+  subjectImage = null;
+  canvas.hidden = true;
+  empty.hidden = false;
+  download.classList.add('disabled');
+  download.setAttribute('aria-disabled', 'true');
+  download.removeAttribute('href');
+  generate.disabled = true;
 }
 
-function loadImage(src) {
+function loadImg(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('图片素材加载失败，请刷新后重试'));
+    img.onerror = () => reject(new Error('图片加载失败'));
     img.src = src;
   });
 }
 
+function cover(img, w, h) {
+  const s = Math.max(w / img.width, h / img.height);
+  const nw = img.width * s;
+  const nh = img.height * s;
+  return [(w - nw) / 2, (h - nh) / 2, nw, nh];
+}
+
+function contain(img, w, h, ratio) {
+  const s = Math.min((w * ratio) / img.width, (h * ratio) / img.height);
+  return [img.width * s, img.height * s];
+}
+
 function findVisibleBounds(img) {
   const c = document.createElement('canvas');
-  const max = 900;
-  const ratio = Math.min(1, max / Math.max(img.width, img.height));
-  c.width = Math.max(1, Math.round(img.width * ratio));
-  c.height = Math.max(1, Math.round(img.height * ratio));
-  const ctx = c.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, c.width, c.height);
-  const data = ctx.getImageData(0, 0, c.width, c.height).data;
-  let minX = c.width, minY = c.height, maxX = 0, maxY = 0, visible = 0;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  c.width = img.width;
+  c.height = img.height;
+  x.drawImage(img, 0, 0);
+  const data = x.getImageData(0, 0, c.width, c.height).data;
+  let minX = c.width, minY = c.height, maxX = -1, maxY = -1, count = 0;
   for (let y = 0; y < c.height; y++) {
-    for (let x = 0; x < c.width; x++) {
-      const a = data[(y * c.width + x) * 4 + 3];
-      if (a > 18) { visible++; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+    for (let xx = 0; xx < c.width; xx++) {
+      const a = data[(y * c.width + xx) * 4 + 3];
+      if (a > 24) {
+        count++;
+        if (xx < minX) minX = xx;
+        if (xx > maxX) maxX = xx;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
     }
   }
-  const ratioVisible = visible / (c.width * c.height);
-  if (!visible || ratioVisible > 0.92) return null;
-  return { sx: minX / ratio, sy: minY / ratio, sw: (maxX - minX + 1) / ratio, sh: (maxY - minY + 1) / ratio };
+  if (!count) return null;
+  return { minX, minY, maxX, maxY, count, ratio: count / (c.width * c.height) };
 }
 
-async function professionalCutout(token) {
-  if (!state.file) throw new Error('还没有上传商品图片');
+function trimTransparent(img) {
+  const b = findVisibleBounds(img);
+  if (!b) throw new Error('没有识别到透明商品主体');
+  const pad = 18;
+  const sx = Math.max(0, b.minX - pad);
+  const sy = Math.max(0, b.minY - pad);
+  const sw = Math.min(img.width - sx, b.maxX - b.minX + 1 + pad * 2);
+  const sh = Math.min(img.height - sy, b.maxY - b.minY + 1 + pad * 2);
+  const c = document.createElement('canvas');
+  c.width = sw;
+  c.height = sh;
+  c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  return loadImg(c.toDataURL('image/png'));
+}
+
+async function professionalCutout(file) {
+  const form = new FormData();
+  form.append('image_file', file);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45000);
+  let res;
   try {
-    const form = new FormData();
-    form.append('image_file', state.file);
-    form.append('size', 'auto');
-    form.append('format', 'png');
-    const res = await fetch('/api/remove-bg', { method: 'POST', body: form, signal: controller.signal });
-    if (token !== state.job) throw new Error('本次处理已取消');
-    if (!res.ok) {
-      let msg = '';
-      try { const json = await res.json(); msg = json.error || json.detail || ''; } catch { msg = await res.text(); }
-      throw new Error(msg || `remove.bg 处理失败（${res.status}）`);
-    }
-    const blob = await res.blob();
-    if (!blob.type.includes('image')) throw new Error('remove.bg 没有返回图片结果');
-    const url = URL.createObjectURL(blob);
-    const img = await loadImage(url);
-    if (!findVisibleBounds(img)) { URL.revokeObjectURL(url); throw new Error('专业抠图没有得到透明主体，不能合成'); }
-    return url;
-  } catch (e) {
-    if (e.name === 'AbortError') throw new Error('remove.bg 响应超时，请稍后重试');
-    throw e;
-  } finally { clearTimeout(timer); }
-}
-
-async function compose(productUrl, strictTransparent) {
-  const [product, scene] = await Promise.all([loadImage(productUrl), loadImage(state.backgroundUrl)]);
-  const bounds = strictTransparent ? findVisibleBounds(product) : null;
-  if (strictTransparent && !bounds) throw new Error('主体没有抠出来，已停止合成');
-  const size = 1000;
-  const c = els.canvas;
-  c.width = size; c.height = size;
-  const ctx = c.getContext('2d');
-  if (!ctx) throw new Error('浏览器不支持图片合成');
-  ctx.fillStyle = state.bgColor; ctx.fillRect(0, 0, size, size);
-  ctx.drawImage(scene, 0, 0, size, size);
-  const box = bounds || { sx: 0, sy: 0, sw: product.width, sh: product.height };
-  const factor = Math.min((size * 0.50 * state.scale / 100) / box.sw, (size * 0.35 * state.scale / 100) / box.sh);
-  const w = box.sw * factor, h = box.sh * factor;
-  ctx.save();
-  ctx.translate(size / 2, size * 0.64);
-  ctx.rotate(state.rotation * Math.PI / 180);
-  if (state.shadow) {
-    ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = '#111'; ctx.filter = `blur(${Math.max(12, size * 0.018)}px)`;
-    ctx.beginPath(); ctx.ellipse(0, h * 0.48, w * 0.42, Math.max(10, h * 0.10), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-  }
-  ctx.drawImage(product, box.sx, box.sy, box.sw, box.sh, -w / 2, -h / 2, w, h);
-  ctx.restore();
-  const output = c.toDataURL('image/jpeg', 0.94);
-  state.resultUrl = output;
-  els.download.href = output;
-  els.download.classList.remove('disabled');
-  els.download.setAttribute('aria-disabled', 'false');
-  els.canvas.hidden = false;
-  els.empty.hidden = true;
-}
-
-async function processImage() {
-  if (!state.file) { els.file.click(); return; }
-  const token = ++state.job;
-  state.busy = true;
-  els.generate.disabled = true;
-  resetResult('开始处理：先抠图，成功后才合成');
-  try {
-    let productUrl = state.sourceUrl;
-    let strict = false;
-    if (state.mode === 'professional') {
-      setProgress(20, '正在调用 remove.bg 专业抠图');
-      productUrl = await professionalCutout(token);
-      strict = true;
-      setProgress(65, '主体已抠出，正在合成背景');
-    } else {
-      setProgress(35, '保留原图模式：不做抠图');
-    }
-    if (token !== state.job) return;
-    await compose(productUrl, strict);
-    if (token !== state.job) return;
-    setProgress(100, '合成完成');
-    setStatus('合成完成，可以下载', false);
-  } catch (e) {
-    if (token === state.job) {
-      els.canvas.hidden = true; els.empty.hidden = false;
-      els.download.classList.add('disabled'); els.download.removeAttribute('href');
-      setProgress(0, '主体抠图失败，不能合成');
-      els.progress.classList.add('show', 'error');
-      setStatus(e.message || '处理失败，请换一张主体更清晰的图片', true);
-    }
+    res = await fetch('/api/remove-bg', { method: 'POST', body: form, signal: controller.signal });
   } finally {
-    if (token === state.job) { state.busy = false; els.generate.disabled = !state.file; }
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    let msg = `remove.bg 处理失败（${res.status}）`;
+    try {
+      const json = await res.json();
+      msg = json.error || json.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  if (!blob.type.includes('png')) throw new Error('remove.bg 没有返回透明 PNG');
+  return URL.createObjectURL(blob);
+}
+
+function draw(final = false) {
+  if (!sourceImage || !subjectImage) {
+    canvas.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  canvas.width = 1000;
+  canvas.height = 1000;
+  ctx.clearRect(0, 0, 1000, 1000);
+  if (bgImage) {
+    ctx.drawImage(bgImage, ...cover(bgImage, 1000, 1000));
+  } else {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, 1000, 1000);
+  }
+  const sc = Number(scale.value) / 100;
+  const deg = Number(rotate.value) * Math.PI / 180;
+  const [iw, ih] = contain(subjectImage, 1000, 1000, 0.54 * sc);
+  const cx = 500 + pos.x;
+  const cy = 610 + pos.y;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(deg);
+  if (useShadow) {
+    ctx.shadowColor = 'rgba(0,0,0,.24)';
+    ctx.shadowBlur = 34;
+    ctx.shadowOffsetY = 22;
+  }
+  ctx.drawImage(subjectImage, -iw / 2, -ih / 2, iw, ih);
+  ctx.restore();
+  canvas.hidden = false;
+  empty.hidden = true;
+  if (final) {
+    const url = canvas.toDataURL('image/jpeg', 0.94);
+    download.href = url;
+    download.download = 'baijing-background.jpg';
+    download.classList.remove('disabled');
+    download.setAttribute('aria-disabled', 'false');
   }
 }
 
-function useFile(file) {
-  if (!file || !file.type.startsWith('image/')) { setStatus('请选择 JPG、PNG 或 WebP 图片', true); return; }
-  if (file.size > 20 * 1024 * 1024) { setStatus('图片不能超过 20MB', true); return; }
-  state.job++;
-  state.file = file;
-  state.sourceUrl = URL.createObjectURL(file);
-  els.drop.classList.add('has-image');
-  els.drop.innerHTML = `<img src="${state.sourceUrl}" alt="已上传的商品图">`;
-  els.replace.hidden = false;
-  els.generate.disabled = false;
-  resetResult('图片已就绪，点击开始合成');
+async function processSubject() {
+  const token = ++processId;
+  resetResult();
+  if (!sourceFile || !sourceImage) return;
+  setStatus(mode === 'professional' ? '正在调用专业抠图，请稍等' : '保留原图模式，可以直接合成');
+  setProgress(mode === 'professional' ? '正在专业抠图' : '准备完成', mode === 'professional' ? 18 : 60);
+  try {
+    let img = sourceImage;
+    if (mode === 'professional') {
+      const cutUrl = await professionalCutout(sourceFile);
+      if (token !== processId) return;
+      img = await loadImg(cutUrl);
+      const bounds = findVisibleBounds(img);
+      if (!bounds || bounds.count < 80) throw new Error('没有识别到商品主体');
+      if (bounds.ratio > 0.86) throw new Error('专业抠图没有得到透明主体，不能合成');
+      img = await trimTransparent(img);
+    }
+    if (token !== processId) return;
+    subjectImage = img;
+    generate.disabled = false;
+    setProgress('主体处理完成，可以合成', 70);
+    setStatus(mode === 'professional' ? '专业抠图完成，可以开始合成' : '保留原图模式，可以开始合成');
+    draw();
+  } catch (err) {
+    if (token !== processId) return;
+    resetResult();
+    setProgress('主体处理失败，不能合成', 0, true);
+    setStatus(`处理失败：${err.message}`, true);
+  }
 }
 
-els.drop.addEventListener('click', () => els.file.click());
-els.replace.addEventListener('click', () => els.file.click());
-els.file.addEventListener('change', e => { useFile(e.target.files[0]); e.target.value = ''; });
-els.drop.addEventListener('dragover', e => e.preventDefault());
-els.drop.addEventListener('drop', e => { e.preventDefault(); useFile(e.dataTransfer.files[0]); });
-els.generate.addEventListener('click', processImage);
+async function loadFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  sourceFile = file;
+  sourceUrl = URL.createObjectURL(file);
+  sourceImage = await loadImg(sourceUrl);
+  pos = { x: 0, y: 120 };
+  drop.className = 'drop has-image';
+  drop.innerHTML = `<img src="${sourceUrl}" alt="已上传商品图">`;
+  replace.hidden = false;
+  await processSubject();
+}
 
-$$('#subjectMode button').forEach(btn => btn.addEventListener('click', () => {
-  state.mode = btn.dataset.value;
-  $$('#subjectMode button').forEach(b => b.classList.toggle('selected', b === btn));
-  els.modeTitle.textContent = state.mode === 'professional' ? 'remove.bg 专业服务' : '保留原图';
-  els.modeNote.textContent = state.mode === 'professional' ? '服务器端调用 remove.bg，拿到透明主体后才合成。' : '不抠图，只把原图放到背景上，适合透明 PNG。';
-  if (state.file) resetResult('处理方式已切换，请重新开始合成');
-}));
+async function selectBackground(src, btn) {
+  [...templates.children].forEach((b) => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  bgImage = await loadImg(src);
+  bgColor = null;
+  draw();
+}
 
-$$('#templates .template').forEach(btn => btn.addEventListener('click', () => {
-  state.backgroundUrl = btn.dataset.background;
-  $$('#templates .template').forEach(b => b.classList.toggle('selected', b === btn));
-  if (state.file) resetResult('背景已切换，请重新开始合成');
-}));
+function renderTemplates() {
+  templates.innerHTML = '';
+  BACKGROUNDS.forEach(([label, src], i) => {
+    const btn = document.createElement('button');
+    btn.className = `template${i === 0 ? ' selected' : ''}`;
+    btn.type = 'button';
+    btn.style.backgroundImage = `url("${src}")`;
+    btn.innerHTML = `<span>${label}</span>`;
+    btn.onclick = () => selectBackground(src, btn);
+    templates.appendChild(btn);
+  });
+  loadImg(BACKGROUNDS[0][1]).then((img) => { bgImage = img; draw(); }).catch(() => setStatus('背景图加载失败，请刷新后重试', true));
+}
 
-$$('#swatches .swatch').forEach(btn => btn.addEventListener('click', () => {
-  state.bgColor = btn.dataset.color;
-  $$('#swatches .swatch').forEach(b => b.classList.toggle('selected', b === btn));
-  if (state.file) resetResult('背景颜色已切换，请重新开始合成');
-}));
+fileInput.onchange = (e) => loadFile(e.target.files[0]);
+drop.onclick = () => fileInput.click();
+replace.onclick = () => fileInput.click();
+drop.ondragover = (e) => e.preventDefault();
+drop.ondrop = (e) => { e.preventDefault(); loadFile(e.dataTransfer.files[0]); };
+subjectMode.onclick = (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  [...subjectMode.children].forEach((b) => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  mode = btn.dataset.value;
+  processSubject();
+};
+swatches.onclick = (e) => {
+  const btn = e.target.closest('.swatch');
+  if (!btn) return;
+  [...swatches.children].forEach((b) => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  [...templates.children].forEach((b) => b.classList.remove('selected'));
+  bgColor = btn.dataset.color;
+  bgImage = null;
+  draw();
+};
+scale.oninput = () => { scaleValue.textContent = `${scale.value}%`; draw(); };
+rotate.oninput = () => { rotateValue.textContent = `${rotate.value}°`; draw(); };
+shadow.onclick = () => { useShadow = !useShadow; shadow.classList.toggle('on', useShadow); draw(); };
+generate.onclick = () => {
+  if (!sourceFile) return fileInput.click();
+  if (!subjectImage) {
+    setProgress('主体没处理成功，不能合成', 0, true);
+    setStatus('没有透明商品主体，已停止合成', true);
+    return;
+  }
+  draw(true);
+  setProgress('合成完成', 100);
+  setStatus('合成完成，可以下载');
+};
+download.onclick = (e) => {
+  if (download.classList.contains('disabled')) e.preventDefault();
+};
+canvas.onpointerdown = (e) => {
+  drag = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y };
+  canvas.setPointerCapture(e.pointerId);
+};
+canvas.onpointermove = (e) => {
+  if (!drag) return;
+  const rect = canvas.getBoundingClientRect();
+  const k = 1000 / rect.width;
+  pos.x = drag.px + (e.clientX - drag.x) * k;
+  pos.y = drag.py + (e.clientY - drag.y) * k;
+  draw();
+};
+canvas.onpointerup = () => { drag = null; };
+bgFile.onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  bgImage = await loadImg(URL.createObjectURL(file));
+  bgColor = null;
+  draw();
+};
 
-els.scale.addEventListener('input', e => { state.scale = Number(e.target.value); els.scaleValue.textContent = `${state.scale}%`; if (state.file) resetResult('商品大小已调整，请重新开始合成'); });
-els.rotate.addEventListener('input', e => { state.rotation = Number(e.target.value); els.rotateValue.textContent = `${state.rotation}°`; if (state.file) resetResult('旋转角度已调整，请重新开始合成'); });
-els.shadow.addEventListener('click', () => { state.shadow = !state.shadow; els.shadow.classList.toggle('on', state.shadow); if (state.file) resetResult('投影已调整，请重新开始合成'); });
-els.bgFile.addEventListener('change', e => { const f = e.target.files[0]; if (f) { state.backgroundUrl = URL.createObjectURL(f); $$('#templates .template').forEach(b => b.classList.remove('selected')); if (state.file) resetResult('自定义背景已上传，请重新开始合成'); } e.target.value = ''; });
-els.download.addEventListener('click', e => { if (!state.resultUrl) { e.preventDefault(); return; } els.download.download = 'jewelry-background-real-1000.jpg'; });
+renderTemplates();
