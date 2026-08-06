@@ -1,4 +1,4 @@
-const VERSION = '20260806b';
+const VERSION = '20260806c';
 const EXPORT_SCALE = 2;
 
 const file = document.querySelector('#file');
@@ -283,7 +283,10 @@ generate.onclick = async () => {
     await nextPaint();
     preview.innerHTML = `<img src="${result}" alt="生成的白底商品图">`;
     setStatus(`专业抠图完成，主体 ${professionalResult.cutoutWidth}×${professionalResult.cutoutHeight}，白底主图已生成`);
-    setResultCopy('专业抠图完成', '一张高清 PNG 白底商品图', `remove.bg 返回主体 ${professionalResult.cutoutWidth}×${professionalResult.cutoutHeight}，接口尺寸策略 ${professionalResult.apiSize}；当前按 ${size} 的 2 倍清晰度导出。`);
+    const qualityNote = professionalResult.apiSize === 'preview'
+      ? '高清额度不足，已自动降级到预览抠图；能出图，但清晰度会受限制。'
+      : `接口尺寸策略 ${professionalResult.apiSize}，当前按 ${size} 的 2 倍清晰度导出。`;
+    setResultCopy('专业抠图完成', '一张 PNG 白底商品图', `remove.bg 返回主体 ${professionalResult.cutoutWidth}×${professionalResult.cutoutHeight}；${qualityNote}`);
     download.disabled = false;
     document.querySelector('#step3').classList.add('active');
   } catch (error) {

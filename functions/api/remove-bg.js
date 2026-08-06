@@ -17,6 +17,14 @@ async function callRemoveBg(apiKey, imageBytes, imageType, filename, size) {
   });
 }
 
+async function readApiDetail(response) {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
 export async function onRequestPost({ request, env }) {
   const apiKey = env.REMOVEBG_API_KEY;
   if (!apiKey) {
@@ -44,17 +52,30 @@ export async function onRequestPost({ request, env }) {
   const extension = imageType.includes("jpeg") || imageType.includes("jpg") ? "jpg" : "png";
   const filename = image.name || `upload.${extension}`;
 
-  let response = await callRemoveBg(apiKey, imageBytes, imageType, filename, "50MP");
-  let requestedSize = "50MP";
+  const attempts = ["50MP", "auto", "preview"];
+  let response;
+  let requestedSize = "";
+  let lastDetail = "";
 
-  if (!response.ok && response.status === 400) {
-    response = await callRemoveBg(apiKey, imageBytes, imageType, filename, "auto");
-    requestedSize = "auto";
+  for (const size of attempts) {
+    response = await callRemoveBg(apiKey, imageBytes, imageType, filename, size);
+    requestedSize = size;
+    if (response.ok) break;
+
+    lastDetail = await readApiDetail(response);
+    if (![400, 402].includes(response.status)) break;
   }
 
-  if (!response.ok) {
-    const detail = await response.text();
-    return jsonError(`remove.bg 处理失败（${response.status}）`, response.status, { detail });
+  if (!response || !response.ok) {
+    const status = response?.status || 502;
+    const isCreditError = status === 402;
+    return jsonError(
+      isCreditError
+        ? "remove.bg 额度不足：高清和预览抠图都没有可用额度了，需要充值或等免费额度恢复"
+        : `remove.bg 处理失败（${status}）`,
+      status,
+      { detail: lastDetail },
+    );
   }
 
   return new Response(response.body, {

@@ -1,5 +1,5 @@
 ﻿const $ = (s) => document.querySelector(s);
-const VERSION = '20260806b';
+const VERSION = '20260806c';
 const EXPORT_SIZE = 2000;
 const BASE_SIZE = 1000;
 const fileInput = $('#file');
@@ -252,7 +252,7 @@ async function processSubject() {
     subjectImage = img;
     generate.disabled = false;
     setProgress('主体处理完成，可以合成', 70);
-    setStatus(mode === 'professional' && lastCutoutSize ? `专业抠图完成，主体 ${lastCutoutSize.width}×${lastCutoutSize.height}，可以开始合成` : '保留原图模式，可以开始合成');
+    setStatus(mode === 'professional' && lastCutoutSize ? `专业抠图完成，主体 ${lastCutoutSize.width}×${lastCutoutSize.height}${lastCutoutSize.apiSize === 'preview' ? '（高清额度不足，已降级）' : ''}，可以开始合成` : '保留原图模式，可以开始合成');
     draw();
     return true;
   } catch (err) {
