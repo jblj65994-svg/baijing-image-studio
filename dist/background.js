@@ -1,4 +1,7 @@
 ﻿const $ = (s) => document.querySelector(s);
+const VERSION = '20260806a';
+const EXPORT_SIZE = 2000;
+const BASE_SIZE = 1000;
 const fileInput = $('#file');
 const bgFile = $('#bgFile');
 const drop = $('#drop');
@@ -158,39 +161,65 @@ function draw(final = false) {
     empty.hidden = false;
     return;
   }
-  canvas.width = 1000;
-  canvas.height = 1000;
-  ctx.clearRect(0, 0, 1000, 1000);
+  const size = EXPORT_SIZE;
+  const unit = size / BASE_SIZE;
+  canvas.width = size;
+  canvas.height = size;
+  ctx.clearRect(0, 0, size, size);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   if (bgImage) {
-    ctx.drawImage(bgImage, ...cover(bgImage, 1000, 1000));
+    ctx.drawImage(bgImage, ...cover(bgImage, size, size));
   } else {
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, 1000, 1000);
+    ctx.fillRect(0, 0, size, size);
   }
   const sc = Number(scale.value) / 100;
   const deg = Number(rotate.value) * Math.PI / 180;
-  const [iw, ih] = contain(subjectImage, 1000, 1000, 0.54 * sc);
-  const cx = 500 + pos.x;
-  const cy = 610 + pos.y;
+  const [iw, ih] = contain(subjectImage, size, size, 0.54 * sc);
+  const cx = size / 2 + pos.x * unit;
+  const cy = size * 0.61 + pos.y * unit;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(deg);
   if (useShadow) {
     ctx.shadowColor = 'rgba(0,0,0,.24)';
-    ctx.shadowBlur = 34;
-    ctx.shadowOffsetY = 22;
+    ctx.shadowBlur = 34 * unit;
+    ctx.shadowOffsetY = 22 * unit;
   }
   ctx.drawImage(subjectImage, -iw / 2, -ih / 2, iw, ih);
   ctx.restore();
   canvas.hidden = false;
   empty.hidden = true;
   if (final) {
-    const url = canvas.toDataURL('image/jpeg', 0.94);
+    applySubtleSharpen(ctx, size, size);
+    const url = canvas.toDataURL('image/png');
     download.href = url;
-    download.download = 'baijing-background.jpg';
+    download.download = 'baijing-background-hd.png';
     download.classList.remove('disabled');
     download.setAttribute('aria-disabled', 'false');
   }
+}
+
+function applySubtleSharpen(context, width, height) {
+  const image = context.getImageData(0, 0, width, height);
+  const data = image.data;
+  const copy = new Uint8ClampedArray(data);
+  const amount = 0.16;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = (y * width + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const center = copy[i + c] * (1 + amount * 4);
+        const top = copy[i - width * 4 + c] * amount;
+        const bottom = copy[i + width * 4 + c] * amount;
+        const left = copy[i - 4 + c] * amount;
+        const right = copy[i + 4 + c] * amount;
+        data[i + c] = Math.max(0, Math.min(255, center - top - bottom - left - right));
+      }
+    }
+  }
+  context.putImageData(image, 0, 0);
 }
 
 async function processSubject() {

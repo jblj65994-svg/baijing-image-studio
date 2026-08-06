@@ -1,4 +1,5 @@
-const VERSION = '20260805i';
+const VERSION = '20260806a';
+const EXPORT_SCALE = 2;
 
 const file = document.querySelector('#file');
 const drop = document.querySelector('#drop');
@@ -22,7 +23,7 @@ if (noteTitle) noteTitle.textContent = '专业抠图已启用';
 if (noteText) noteText.textContent = '优先使用 remove.bg 去除背景并生成白底图；如果接口失败，会明确提示失败，不再用原图假装成功。';
 
 const versionBadge = document.createElement('div');
-versionBadge.textContent = `版本 ${VERSION}`;
+versionBadge.textContent = `版本 ${VERSION} · 高清PNG`;
 versionBadge.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:20;background:#1f6a4a;color:#fff;font-size:11px;padding:5px 8px;border-radius:2px;opacity:.9';
 document.body.appendChild(versionBadge);
 
@@ -86,8 +87,10 @@ function load(input) {
 
 function renderWhiteCanvas(product) {
   const dimensions = size.match(/\d+/g).map(Number);
-  const width = dimensions[0] || 1000;
-  const height = dimensions[1] || width;
+  const displayWidth = dimensions[0] || 1000;
+  const displayHeight = dimensions[1] || displayWidth;
+  const width = displayWidth * EXPORT_SCALE;
+  const height = displayHeight * EXPORT_SCALE;
   const productWidth = product.naturalWidth || product.width;
   const productHeight = product.naturalHeight || product.height;
   const canvas = document.createElement('canvas');
@@ -117,7 +120,29 @@ function renderWhiteCanvas(product) {
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
   context.drawImage(product, x, y, drawWidth, drawHeight);
-  return canvas.toDataURL('image/jpeg', 0.96);
+  applySubtleSharpen(context, width, height);
+  return canvas.toDataURL('image/png');
+}
+
+function applySubtleSharpen(context, width, height) {
+  const image = context.getImageData(0, 0, width, height);
+  const data = image.data;
+  const copy = new Uint8ClampedArray(data);
+  const amount = 0.18;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = (y * width + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const center = copy[i + c] * (1 + amount * 4);
+        const top = copy[i - width * 4 + c] * amount;
+        const bottom = copy[i + width * 4 + c] * amount;
+        const left = copy[i - 4 + c] * amount;
+        const right = copy[i + 4 + c] * amount;
+        data[i + c] = Math.max(0, Math.min(255, center - top - bottom - left - right));
+      }
+    }
+  }
+  context.putImageData(image, 0, 0);
 }
 
 function validateTransparentCutout(product) {
@@ -250,7 +275,7 @@ generate.onclick = async () => {
     await nextPaint();
     preview.innerHTML = `<img src="${result}" alt="生成的白底商品图">`;
     setStatus('专业抠图完成，白底主图已生成');
-    setResultCopy('专业抠图完成', '一张干净的白底商品图', `背景已由 remove.bg 移除，并按 ${size} 像素生成。`);
+    setResultCopy('专业抠图完成', '一张高清 PNG 白底商品图', `背景已由 remove.bg 移除，并按 ${size} 的 2 倍清晰度导出，细节会比原来的 JPG 更稳。`);
     download.disabled = false;
     document.querySelector('#step3').classList.add('active');
   } catch (error) {
@@ -271,6 +296,6 @@ download.onclick = () => {
   if (!result) return;
   const anchor = document.createElement('a');
   anchor.href = result;
-  anchor.download = 'white-background-product.jpg';
+  anchor.download = 'white-background-product-hd.png';
   anchor.click();
 };
