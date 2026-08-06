@@ -1,4 +1,4 @@
-const VERSION = '20260806a';
+const VERSION = '20260806b';
 const EXPORT_SCALE = 2;
 
 const file = document.querySelector('#file');
@@ -225,8 +225,15 @@ async function createProfessionalWhiteBackground() {
   const cutoutUrl = URL.createObjectURL(transparentProduct);
   try {
     const cutout = await loadImage(cutoutUrl);
+    const cutoutWidth = cutout.naturalWidth || cutout.width;
+    const cutoutHeight = cutout.naturalHeight || cutout.height;
     validateTransparentCutout(cutout);
-    return renderWhiteCanvas(cutout);
+    return {
+      dataUrl: renderWhiteCanvas(cutout),
+      cutoutWidth,
+      cutoutHeight,
+      apiSize: response.headers.get('x-baijing-removebg-size') || 'auto',
+    };
   } finally {
     URL.revokeObjectURL(cutoutUrl);
   }
@@ -270,12 +277,13 @@ generate.onclick = async () => {
   try {
     await nextPaint();
     showProgress(45, '正在使用专业抠图移除背景');
-    result = await createProfessionalWhiteBackground();
+    const professionalResult = await createProfessionalWhiteBackground();
+    result = professionalResult.dataUrl;
     showProgress(92, '正在生成下载文件');
     await nextPaint();
     preview.innerHTML = `<img src="${result}" alt="生成的白底商品图">`;
-    setStatus('专业抠图完成，白底主图已生成');
-    setResultCopy('专业抠图完成', '一张高清 PNG 白底商品图', `背景已由 remove.bg 移除，并按 ${size} 的 2 倍清晰度导出，细节会比原来的 JPG 更稳。`);
+    setStatus(`专业抠图完成，主体 ${professionalResult.cutoutWidth}×${professionalResult.cutoutHeight}，白底主图已生成`);
+    setResultCopy('专业抠图完成', '一张高清 PNG 白底商品图', `remove.bg 返回主体 ${professionalResult.cutoutWidth}×${professionalResult.cutoutHeight}，接口尺寸策略 ${professionalResult.apiSize}；当前按 ${size} 的 2 倍清晰度导出。`);
     download.disabled = false;
     document.querySelector('#step3').classList.add('active');
   } catch (error) {

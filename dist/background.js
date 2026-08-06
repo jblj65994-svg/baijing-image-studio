@@ -1,5 +1,5 @@
 ﻿const $ = (s) => document.querySelector(s);
-const VERSION = '20260806a';
+const VERSION = '20260806b';
 const EXPORT_SIZE = 2000;
 const BASE_SIZE = 1000;
 const fileInput = $('#file');
@@ -42,6 +42,7 @@ let subjectImage = null;
 let bgImage = null;
 let bgColor = '#ffffff';
 let mode = 'professional';
+let lastCutoutSize = null;
 let useShadow = true;
 let pos = { x: 0, y: 120 };
 let drag = null;
@@ -152,7 +153,10 @@ async function professionalCutout(file) {
   }
   const blob = await res.blob();
   if (!blob.type.includes('png')) throw new Error('remove.bg 没有返回透明 PNG');
-  return URL.createObjectURL(blob);
+  return {
+    url: URL.createObjectURL(blob),
+    apiSize: res.headers.get('x-baijing-removebg-size') || 'auto',
+  };
 }
 
 function draw(final = false) {
@@ -231,9 +235,14 @@ async function processSubject() {
   try {
     let img = sourceImage;
     if (mode === 'professional') {
-      const cutUrl = await professionalCutout(sourceFile);
+      const cutoutResult = await professionalCutout(sourceFile);
       if (token !== processId) return;
-      img = await loadImg(cutUrl);
+      img = await loadImg(cutoutResult.url);
+      lastCutoutSize = {
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+        apiSize: cutoutResult.apiSize,
+      };
       const bounds = findVisibleBounds(img);
       if (!bounds || bounds.count < 80) throw new Error('没有识别到商品主体');
       if (bounds.ratio > 0.86) throw new Error('专业抠图没有得到透明主体，不能合成');
@@ -243,7 +252,7 @@ async function processSubject() {
     subjectImage = img;
     generate.disabled = false;
     setProgress('主体处理完成，可以合成', 70);
-    setStatus(mode === 'professional' ? '专业抠图完成，可以开始合成' : '保留原图模式，可以开始合成');
+    setStatus(mode === 'professional' && lastCutoutSize ? `专业抠图完成，主体 ${lastCutoutSize.width}×${lastCutoutSize.height}，可以开始合成` : '保留原图模式，可以开始合成');
     draw();
     return true;
   } catch (err) {
