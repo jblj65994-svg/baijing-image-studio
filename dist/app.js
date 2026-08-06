@@ -1,5 +1,6 @@
-const VERSION = '20260806c';
+const VERSION = '20260806d';
 const EXPORT_SCALE = 2;
+const MAX_PRODUCT_UPSCALE = 1.25;
 
 const file = document.querySelector('#file');
 const drop = document.querySelector('#drop');
@@ -100,7 +101,8 @@ function renderWhiteCanvas(product) {
   context.fillStyle = '#fff';
   context.fillRect(0, 0, width, height);
 
-  const scaleRatio = Math.min((width * 0.76) / productWidth, (height * 0.76) / productHeight);
+  const fitRatio = Math.min((width * 0.76) / productWidth, (height * 0.76) / productHeight);
+  const scaleRatio = Math.min(fitRatio, MAX_PRODUCT_UPSCALE);
   const drawWidth = productWidth * scaleRatio;
   const drawHeight = productHeight * scaleRatio;
   const x = (width - drawWidth) / 2;

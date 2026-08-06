@@ -1,7 +1,8 @@
 ﻿const $ = (s) => document.querySelector(s);
-const VERSION = '20260806c';
+const VERSION = '20260806d';
 const EXPORT_SIZE = 2000;
 const BASE_SIZE = 1000;
+const MAX_SUBJECT_UPSCALE = 1.25;
 const fileInput = $('#file');
 const bgFile = $('#bgFile');
 const drop = $('#drop');
@@ -88,8 +89,9 @@ function cover(img, w, h) {
   return [(w - nw) / 2, (h - nh) / 2, nw, nh];
 }
 
-function contain(img, w, h, ratio) {
-  const s = Math.min((w * ratio) / img.width, (h * ratio) / img.height);
+function contain(img, w, h, ratio, maxUpscale = Infinity) {
+  const fitRatio = Math.min((w * ratio) / img.width, (h * ratio) / img.height);
+  const s = Math.min(fitRatio, maxUpscale);
   return [img.width * s, img.height * s];
 }
 
@@ -180,7 +182,7 @@ function draw(final = false) {
   }
   const sc = Number(scale.value) / 100;
   const deg = Number(rotate.value) * Math.PI / 180;
-  const [iw, ih] = contain(subjectImage, size, size, 0.54 * sc);
+  const [iw, ih] = contain(subjectImage, size, size, 0.54 * sc, MAX_SUBJECT_UPSCALE);
   const cx = size / 2 + pos.x * unit;
   const cy = size * 0.61 + pos.y * unit;
   ctx.save();
